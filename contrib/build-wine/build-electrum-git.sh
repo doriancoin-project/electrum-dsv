@@ -21,7 +21,7 @@ git submodule update --init
 LOCALE="$WINEPREFIX/drive_c/electrum-dsv/electrum_ltc/locale/"
 # we want the binary to have only compiled (.mo) locale files; not source (.po) files
 rm -rf "$LOCALE"
-"$CONTRIB/build_locale.sh" "$CONTRIB/deterministic-build/electrum-dsv-locale/locale/" "$LOCALE"
+"$CONTRIB/build_locale.sh" "$CONTRIB/deterministic-build/electrum-ltc-locale/locale/" "$LOCALE"
 
 find -exec touch -h -d '2000-11-11T11:11:11+00:00' {} +
 popd
