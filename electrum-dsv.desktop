@@ -1,0 +1,22 @@
+# If you want Electrum to appear in a Linux app launcher ("start menu"), install this by doing:
+# sudo desktop-file-install electrum-dsv.desktop
+
+[Desktop Entry]
+Comment=Lightweight Doriancoin Client
+Exec=sh -c "PATH=\"\\$HOME/.local/bin:\\$PATH\"; electrum-dsv %u"
+GenericName[en_US]=Doriancoin Wallet
+GenericName=Doriancoin Wallet
+Icon=electrum-dsv
+Name[en_US]=Electrum Doriancoin Wallet
+Name=Electrum Doriancoin Wallet
+Categories=Finance;Network;
+StartupNotify=true
+StartupWMClass=electrum-dsv
+Terminal=false
+Type=Application
+MimeType=x-scheme-handler/doriancoin;
+Actions=Testnet;
+
+[Desktop Action Testnet]
+Exec=sh -c "PATH=\"\\$HOME/.local/bin:\\$PATH\"; electrum-dsv --testnet %u"
+Name=Testnet mode

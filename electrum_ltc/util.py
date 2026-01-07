@@ -602,16 +602,16 @@ def xor_bytes(a: bytes, b: bytes) -> bytes:
 
 
 def user_dir():
-    if "ELECTRUMLTC_DIR" in os.environ:
-        return os.environ["ELECTRUMLTC_DIR"]
+    if "ELECTRUMDSV_DIR" in os.environ:
+        return os.environ["ELECTRUMDSV_DIR"]
     elif 'ANDROID_DATA' in os.environ:
         return android_data_dir()
     elif os.name == 'posix':
-        return os.path.join(os.environ["HOME"], ".electrum-ltc")
+        return os.path.join(os.environ["HOME"], ".electrum-dsv")
     elif "APPDATA" in os.environ:
-        return os.path.join(os.environ["APPDATA"], "Electrum-LTC")
+        return os.path.join(os.environ["APPDATA"], "Electrum-DSV")
     elif "LOCALAPPDATA" in os.environ:
-        return os.path.join(os.environ["LOCALAPPDATA"], "Electrum-LTC")
+        return os.path.join(os.environ["LOCALAPPDATA"], "Electrum-DSV")
     else:
         #raise Exception("No home directory found in environment variables.")
         return
@@ -826,32 +826,14 @@ def time_difference(distance_in_time, include_seconds):
         return "over %d years" % (round(distance_in_minutes / 525600))
 
 mainnet_block_explorers = {
-    'Bitaps.com': ('https://ltc.bitaps.com/',
-                        {'tx': '', 'addr': ''}),
-    'Blockchair.com': ('https://blockchair.com/litecoin/',
-                        {'tx': 'transaction/', 'addr': 'address/'}),
-    'Blockchair.com (Tor)': ('http://blkchairbknpn73cfjhevhla7rkp4ed5gg2knctvv7it4lioy22defid.onion/litecoin/',
-                        {'tx': 'transaction/', 'addr': 'address/'}),
-    'BlockCypher.com': ('https://live.blockcypher.com/ltc/',
+    'explorer.doriancoin.com': ('https://explorer.doriancoin.com/',
                         {'tx': 'tx/', 'addr': 'address/'}),
-    'explorer.litecoin.net': ('http://explorer.litecoin.net/',
-                        {'tx': 'tx/', 'addr': 'address/'}),
-    'LiteCore': ('https://insight.litecore.io/',
-                        {'tx': 'tx/', 'addr': 'address/'}),
-    'SoChain': ('https://chain.so/',
-                        {'tx': 'tx/LTC/', 'addr': 'address/LTC/'}),
-    'system default': ('blockchain://12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2/',
+    'system default': ('blockchain://d21da25e277bd20b7456087d69c5fee2ebc6091b410271b5cb0623c7d1e7d1b9/',
                         {'tx': 'tx/', 'addr': 'address/'}),
 }
 
 testnet_block_explorers = {
-    'Bitaps.com': ('https://tltc.bitaps.com/',
-                       {'tx': '', 'addr': ''}),
-    'LiteCore': ('https://testnet.litecore.io/',
-                        {'tx': 'tx/', 'addr': 'address/'}),
-    'SoChain': ('https://chain.so/',
-                        {'tx': 'tx/LTCTEST/', 'addr': 'address/LTCTEST/'}),
-    'system default': ('blockchain://4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0/',
+    'system default': ('blockchain://707769464eb59fdd7b75cdbc5f0e72226345281852325c965b8ee1fd592fbf51/',
                        {'tx': 'tx/', 'addr': 'address/'}),
 }
 
@@ -929,7 +911,7 @@ def block_explorer_URL(config: 'SimpleConfig', kind: str, item: str) -> Optional
 
 
 # note: when checking against these, use .lower() to support case-insensitivity
-BITCOIN_BIP21_URI_SCHEME = 'litecoin'
+BITCOIN_BIP21_URI_SCHEME = 'doriancoin'
 LIGHTNING_URI_SCHEME = 'lightning'
 
 

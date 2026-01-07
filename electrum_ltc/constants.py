@@ -40,8 +40,8 @@ def read_json(filename, default):
     return r
 
 
-GIT_REPO_URL = "https://github.com/pooler/electrum-ltc"
-GIT_REPO_ISSUES_URL = "https://github.com/pooler/electrum-ltc/issues"
+GIT_REPO_URL = "https://github.com/preciousmouse/electrum-dsv"
+GIT_REPO_ISSUES_URL = "https://github.com/preciousmouse/electrum-dsv/issues"
 BIP39_WALLET_FORMATS = read_json('bip39_wallet_formats.json', [])
 
 
@@ -72,16 +72,16 @@ class BitcoinMainnet(AbstractNet):
 
     NET_NAME = "mainnet"
     TESTNET = False
-    WIF_PREFIX = 0x80
-    ADDRTYPE_P2PKH = 48
-    ADDRTYPE_P2SH = 50
-    SEGWIT_HRP = "ltc"
+    WIF_PREFIX = 0xB0
+    ADDRTYPE_P2PKH = 30
+    ADDRTYPE_P2SH = 5
+    SEGWIT_HRP = "dsv"
     BOLT11_HRP = SEGWIT_HRP
-    GENESIS = "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2"
+    GENESIS = "d21da25e277bd20b7456087d69c5fee2ebc6091b410271b5cb0623c7d1e7d1b9"
     DEFAULT_PORTS = {'t': '50001', 's': '50002'}
     DEFAULT_SERVERS = read_json('servers.json', {})
     CHECKPOINTS = read_json('checkpoints.json', [])
-    BLOCK_HEIGHT_FIRST_LIGHTNING_CHANNELS = 497000
+    BLOCK_HEIGHT_FIRST_LIGHTNING_CHANNELS = 0  # Lightning disabled for Doriancoin
 
     XPRV_HEADERS = {
         'standard':    0x0488ade4,  # xprv
@@ -99,23 +99,21 @@ class BitcoinMainnet(AbstractNet):
         'p2wsh':       0x02aa7ed3,  # Zpub
     }
     XPUB_HEADERS_INV = inv_dict(XPUB_HEADERS)
-    BIP44_COIN_TYPE = 2
+    BIP44_COIN_TYPE = 1952  # Doriancoin (unregistered)
     LN_REALM_BYTE = 0
-    LN_DNS_SEEDS = [
-        'ltc.nodes.lightning.directory.',
-    ]
+    LN_DNS_SEEDS = []  # Lightning disabled for Doriancoin
 
 
 class BitcoinTestnet(AbstractNet):
 
     NET_NAME = "testnet"
     TESTNET = True
-    WIF_PREFIX = 0xbf
-    ADDRTYPE_P2PKH = 111
-    ADDRTYPE_P2SH = 58
-    SEGWIT_HRP = "tltc"
+    WIF_PREFIX = 0xEF
+    ADDRTYPE_P2PKH = 30
+    ADDRTYPE_P2SH = 22
+    SEGWIT_HRP = "tdsv"
     BOLT11_HRP = SEGWIT_HRP
-    GENESIS = "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0"
+    GENESIS = "707769464eb59fdd7b75cdbc5f0e72226345281852325c965b8ee1fd592fbf51"
     DEFAULT_PORTS = {'t': '51001', 's': '51002'}
     DEFAULT_SERVERS = read_json('servers_testnet.json', {})
     CHECKPOINTS = read_json('checkpoints_testnet.json', [])
@@ -138,18 +136,15 @@ class BitcoinTestnet(AbstractNet):
     XPUB_HEADERS_INV = inv_dict(XPUB_HEADERS)
     BIP44_COIN_TYPE = 1
     LN_REALM_BYTE = 1
-    LN_DNS_SEEDS = [  # TODO investigate this again
-        #'test.nodes.lightning.directory.',  # times out.
-        #'lseed.bitcoinstats.com.',  # ignores REALM byte and returns mainnet peers...
-    ]
+    LN_DNS_SEEDS = []  # Lightning disabled for Doriancoin
 
 
 class BitcoinRegtest(BitcoinTestnet):
 
     NET_NAME = "regtest"
-    SEGWIT_HRP = "rltc"
+    SEGWIT_HRP = "rdsv"
     BOLT11_HRP = SEGWIT_HRP
-    GENESIS = "530827f38f93b43ed12af0b3ad25a288dc02ed74d6d7857862df51fc56c416f9"
+    GENESIS = "707769464eb59fdd7b75cdbc5f0e72226345281852325c965b8ee1fd592fbf51"
     DEFAULT_SERVERS = read_json('servers_regtest.json', {})
     CHECKPOINTS = []
     LN_DNS_SEEDS = []

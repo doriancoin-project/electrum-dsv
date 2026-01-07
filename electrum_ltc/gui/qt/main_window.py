@@ -243,7 +243,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         if self.config.get("is_maximized"):
             self.showMaximized()
 
-        self.setWindowIcon(read_QIcon("electrum-ltc.png"))
+        self.setWindowIcon(read_QIcon("electrum-dsv.png"))
         self.init_menubar()
 
         wrtabs = weakref.proxy(tabs)
@@ -279,7 +279,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
 
         # If the option hasn't been set yet
         if config.get('check_updates') is None:
-            choice = self.question(title="Electrum-LTC - " + _("Enable update check"),
+            choice = self.question(title="Electrum-DSV - " + _("Enable update check"),
                                    msg=_("For security reasons we advise that you always use the latest version of Electrum.") + " " +
                                        _("Would you like to be notified when there is a newer version of Electrum available?"))
             config.set_key('check_updates', bool(choice), save=True)
@@ -521,7 +521,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
 
     @classmethod
     def get_app_name_and_version_str(cls) -> str:
-        name = "Electrum-LTC"
+        name = "Electrum-DSV"
         if constants.net.TESTNET:
             name += " " + constants.net.NET_NAME.capitalize()
         return f"{name} {ELECTRUM_VERSION}"
@@ -543,8 +543,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         if self.wallet.is_watching_only():
             msg = ' '.join([
                 _("This wallet is watching-only."),
-                _("This means you will not be able to spend litecoins with it."),
-                _("Make sure you own the seed phrase or the private keys, before you request litecoins to be sent to this wallet.")
+                _("This means you will not be able to spend doriancoins with it."),
+                _("Make sure you own the seed phrase or the private keys, before you request doriancoins to be sent to this wallet.")
             ])
             self.show_warning(msg, title=_('Watch-only wallet'))
 
@@ -561,7 +561,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         msg = ''.join([
             _("You are in testnet mode."), ' ',
             _("Testnet coins are worthless."), '\n',
-            _("Testnet is separate from the main Litecoin network. It is used for testing.")
+            _("Testnet is separate from the main Doriancoin network. It is used for testing.")
         ])
         cb = QCheckBox(_("Don't show this again."))
         cb_checked = False
@@ -760,7 +760,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         help_menu = menubar.addMenu(_("&Help"))
         help_menu.addAction(_("&About"), self.show_about)
         help_menu.addAction(_("&Check for updates"), self.show_update_check)
-        help_menu.addAction(_("&Official website"), lambda: webopen("https://electrum-ltc.org"))
+        help_menu.addAction(_("&Official website"), lambda: webopen("https://doriancoin.org"))
         help_menu.addSeparator()
         help_menu.addAction(_("&Documentation"), lambda: webopen("http://docs.electrum.org/")).setShortcut(QKeySequence.HelpContents)
         help_menu.addAction(_("&Report Bug"), self.show_report_bug)
@@ -773,18 +773,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         d = self.network.get_donation_address()
         if d:
             host = self.network.get_parameters().server.host
-            self.handle_payment_identifier('litecoin:%s?message=donation for %s' % (d, host))
+            self.handle_payment_identifier('doriancoin:%s?message=donation for %s' % (d, host))
         else:
             self.show_error(_('No donation address for this server'))
 
     def show_about(self):
-        QMessageBox.about(self, "Electrum-LTC",
+        QMessageBox.about(self, "Electrum-DSV",
                           (_("Version")+" %s" % ELECTRUM_VERSION + "\n\n" +
-                           _("Electrum's focus is speed, with low resource usage and simplifying Litecoin.") + " " +
+                           _("Electrum's focus is speed, with low resource usage and simplifying Doriancoin.") + " " +
                            _("You do not need to perform regular backups, because your wallet can be "
                               "recovered from a secret phrase that you can memorize or write on paper.") + " " +
                            _("Startup times are instant because it operates in conjunction with high-performance "
-                              "servers that handle the most complicated parts of the Litecoin system.") + "\n\n" +
+                              "servers that handle the most complicated parts of the Doriancoin system.") + "\n\n" +
                            _("Uses icons from the Icons8 icon pack (icons8.com).")))
 
     def show_update_check(self, version=None):
@@ -797,7 +797,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
             _("Before reporting a bug, upgrade to the most recent version of Electrum (latest release or git HEAD), and include the version number in your report."),
             _("Try to explain not only what the bug is, but how it occurs.")
          ])
-        self.show_message(msg, title="Electrum-LTC - " + _("Reporting Bugs"), rich_text=True)
+        self.show_message(msg, title="Electrum-DSV - " + _("Reporting Bugs"), rich_text=True)
 
     def notify_transactions(self):
         if self.tx_notification_queue.qsize() == 0:
@@ -837,9 +837,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         if self.tray:
             try:
                 # this requires Qt 5.9
-                self.tray.showMessage("Electrum-LTC", message, read_QIcon("electrum_dark_icon"), 20000)
+                self.tray.showMessage("Electrum-DSV", message, read_QIcon("electrum_dark_icon"), 20000)
             except TypeError:
-                self.tray.showMessage("Electrum-LTC", message, QSystemTrayIcon.Information, 20000)
+                self.tray.showMessage("Electrum-DSV", message, QSystemTrayIcon.Information, 20000)
 
     def timer_actions(self):
         # refresh invoices and requests because they show ETA
@@ -1926,7 +1926,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         address  = address.text().strip()
         message = message.toPlainText().strip()
         if not bitcoin.is_address(address):
-            self.show_message(_('Invalid Litecoin address.'))
+            self.show_message(_('Invalid Doriancoin address.'))
             return
         if self.wallet.is_watching_only():
             self.show_message(_('This is a watching-only wallet.'))
@@ -1954,7 +1954,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         address  = address.text().strip()
         message = message.toPlainText().strip().encode('utf-8')
         if not bitcoin.is_address(address):
-            self.show_message(_('Invalid Litecoin address.'))
+            self.show_message(_('Invalid Doriancoin address.'))
             return
         try:
             # This can throw on invalid base64
@@ -2221,7 +2221,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger, QtEventListener):
         e.setReadOnly(True)
         vbox.addWidget(e)
 
-        defaultname = 'electrum-ltc-private-keys.csv'
+        defaultname = 'electrum-dsv-private-keys.csv'
         select_msg = _('Select file to export your private keys to')
         hbox, filename_e, csv_button = filename_field(self, self.config, defaultname, select_msg)
         vbox.addLayout(hbox)
