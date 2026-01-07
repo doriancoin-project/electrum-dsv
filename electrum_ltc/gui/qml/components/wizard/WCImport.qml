@@ -26,11 +26,11 @@ WizardComponent {
     ColumnLayout {
         width: parent.width
 
-        Label { text: qsTr('Import Litecoin Addresses') }
+        Label { text: qsTr('Import Doriancoin Addresses') }
 
         InfoTextArea {
             Layout.preferredWidth: parent.width
-            text: qsTr('Enter a list of Litecoin addresses (this will create a watching-only wallet), or a list of private keys.')
+            text: qsTr('Enter a list of Doriancoin addresses (this will create a watching-only wallet), or a list of private keys.')
         }
 
         RowLayout {
