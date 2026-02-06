@@ -114,7 +114,7 @@ class BitcoinTestnet(AbstractNet):
     SEGWIT_HRP = "tdsv"
     BOLT11_HRP = SEGWIT_HRP
     GENESIS = "707769464eb59fdd7b75cdbc5f0e72226345281852325c965b8ee1fd592fbf51"
-    DEFAULT_PORTS = {'t': '51001', 's': '51002'}
+    DEFAULT_PORTS = {'t': '50001', 's': '50002'}
     DEFAULT_SERVERS = read_json('servers_testnet.json', {})
     CHECKPOINTS = read_json('checkpoints_testnet.json', [])
 

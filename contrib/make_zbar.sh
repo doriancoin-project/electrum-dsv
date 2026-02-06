@@ -55,6 +55,7 @@ info "Building $pkgname..."
                 --disable-dependency-tracking"
         elif [ $(uname) == "Darwin" ]; then
             # macos target
+            export LDFLAGS="${LDFLAGS} -liconv"
             AUTOCONF_FLAGS="$AUTOCONF_FLAGS \
                 --with-x=no \
                 --enable-video=no \

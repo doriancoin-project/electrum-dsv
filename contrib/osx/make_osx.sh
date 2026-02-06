@@ -5,7 +5,7 @@ set -e
 # Parameterize
 PYTHON_VERSION=3.9.13
 PY_VER_MAJOR="3.9"  # as it appears in fs paths
-PACKAGE=Electrum-LTC
+PACKAGE=Electrum-DSV
 GIT_REPO=https://github.com/pooler/electrum-ltc
 
 export GCC_STRIP_BINARIES="1"
@@ -78,8 +78,14 @@ echo "167c4e2d9f172a617ba6f3b08783cf376dec429386378066eb2f865c98030dd7  $CACHEDI
 sudo installer -pkg "$CACHEDIR/$PKG_FILE" -target / \
     || fail "failed to install python"
 
-# sanity check "python3" has the version we just installed.
-FOUND_PY_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
+# Use the python.org-installed Python 3.9 explicitly, in case another Python is first in PATH.
+PYTHON39="/Library/Frameworks/Python.framework/Versions/${PY_VER_MAJOR}/bin/python3"
+if [ ! -x "$PYTHON39" ]; then
+    fail "Could not find Python at $PYTHON39"
+fi
+
+# sanity check the version we just installed.
+FOUND_PY_VERSION=$("$PYTHON39" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
 if [[ "$FOUND_PY_VERSION" != "$PYTHON_VERSION" ]]; then
     fail "python version mismatch: $FOUND_PY_VERSION != $PYTHON_VERSION"
 fi
@@ -90,7 +96,7 @@ break_legacy_easy_install
 # This helps to avoid older versions of pip-installed dependencies interfering with the build.
 VENV_DIR="$CONTRIB_OSX/build-venv"
 rm -rf "$VENV_DIR"
-python3 -m venv $VENV_DIR
+"$PYTHON39" -m venv $VENV_DIR
 source $VENV_DIR/bin/activate
 
 # don't add debug info to compiled C files (e.g. when pip calls setuptools/wheel calls gcc)
@@ -178,6 +184,14 @@ info "generating locale"
 ) || fail "failed generating locale"
 
 
+# On Apple Silicon, cross-compile native libs to x86_64 to match the x86_64 Python.
+if [ "$(uname -m)" = "arm64" ]; then
+    export CFLAGS="${CFLAGS:-} -arch x86_64"
+    export LDFLAGS="${LDFLAGS:-} -arch x86_64"
+    export ARCHFLAGS="-arch x86_64"
+    info "Detected ARM Mac: cross-compiling native libs for x86_64"
+fi
+
 if [ ! -f "$DLL_TARGET_DIR/libsecp256k1.0.dylib" ]; then
     info "Building libsecp256k1 dylib..."
     "$CONTRIB"/make_libsecp256k1.sh || fail "Could not build libsecp"
@@ -253,9 +267,9 @@ if [ ! -z "$CODESIGN_CERT" ]; then
 fi
 
 info "Creating .DMG"
-hdiutil create -fs HFS+ -volname $PACKAGE -srcfolder dist/$PACKAGE.app dist/electrum-ltc-$VERSION.dmg || fail "Could not create .DMG"
+hdiutil create -fs HFS+ -volname $PACKAGE -srcfolder dist/$PACKAGE.app dist/electrum-dsv-$VERSION.dmg || fail "Could not create .DMG"
 
-DoCodeSignMaybe ".DMG" "dist/electrum-ltc-${VERSION}.dmg"
+DoCodeSignMaybe ".DMG" "dist/electrum-dsv-${VERSION}.dmg"
 
 if [ -z "$CODESIGN_CERT" ]; then
     warn "App was built successfully but was not code signed. Users may get security warnings from macOS."

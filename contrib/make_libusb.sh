@@ -45,6 +45,7 @@ info "Building $pkgname..."
         fi
         LDFLAGS="$LDFLAGS" ./configure \
             $AUTOCONF_FLAGS \
+            --prefix="$here/$pkgname/dist" \
             || fail "Could not configure $pkgname. Please make sure you have a C compiler installed and try again."
     fi
     make -j4 || fail "Could not build $pkgname"
