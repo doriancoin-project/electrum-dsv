@@ -322,18 +322,41 @@ class Blockchain(Logger):
     def verify_chunk(self, index: int, data: bytes) -> None:
         num = len(data) // HEADER_SIZE
         start_height = index * 2016
+        end_height = start_height + num - 1
         prev_hash = self.get_hash(start_height - 1)
-        target = self.get_target(index-1)
-        for i in range(num):
-            height = start_height + i
-            try:
-                expected_header_hash = self.get_hash(height)
-            except MissingHeader:
-                expected_header_hash = None
-            raw_header = data[i*HEADER_SIZE : (i+1)*HEADER_SIZE]
-            header = deserialize_header(raw_header, index*2016 + i)
-            self.verify_header(header, prev_hash, target, expected_header_hash)
-            prev_hash = hash_header(header)
+        lwma_height = constants.net.LWMA_HEIGHT
+
+        # If entire chunk is pre-LWMA, use single chunk-level target
+        if end_height < lwma_height:
+            target = self.get_target(index - 1)
+            for i in range(num):
+                height = start_height + i
+                try:
+                    expected_header_hash = self.get_hash(height)
+                except MissingHeader:
+                    expected_header_hash = None
+                raw_header = data[i*HEADER_SIZE : (i+1)*HEADER_SIZE]
+                header = deserialize_header(raw_header, height)
+                self.verify_header(header, prev_hash, target, expected_header_hash)
+                prev_hash = hash_header(header)
+        else:
+            # Chunk contains per-block difficulty headers
+            recent_headers = {}
+            for i in range(num):
+                height = start_height + i
+                try:
+                    expected_header_hash = self.get_hash(height)
+                except MissingHeader:
+                    expected_header_hash = None
+                raw_header = data[i*HEADER_SIZE : (i+1)*HEADER_SIZE]
+                header = deserialize_header(raw_header, height)
+                if height < lwma_height:
+                    target = self.get_target(index - 1)
+                else:
+                    target = self.get_target_for_block(height, recent_headers)
+                self.verify_header(header, prev_hash, target, expected_header_hash)
+                recent_headers[height] = header
+                prev_hash = hash_header(header)
 
     @with_lock
     def path(self):
@@ -487,6 +510,207 @@ class Blockchain(Logger):
             return None
         return deserialize_header(h, height)
 
+    def _get_header_by_height(self, height: int, recent_headers: Optional[dict] = None) -> Optional[dict]:
+        """Get a header by height, checking recent_headers dict first (for in-chunk lookups)."""
+        if recent_headers and height in recent_headers:
+            return recent_headers[height]
+        return self.read_header(height)
+
+    def get_target_for_block(self, height: int, recent_headers: Optional[dict] = None) -> int:
+        """Dispatch to the correct difficulty algorithm based on block height."""
+        net = constants.net
+        if height > net.ASERT_HEIGHT:
+            return self._get_target_asert(height, recent_headers)
+        if height >= net.LWMA_FIX_HEIGHT:
+            return self._get_target_lwmav2(height, recent_headers)
+        if height >= net.LWMA_HEIGHT:
+            return self._get_target_lwma(height, recent_headers)
+        # BTC-style: use chunk-level target
+        return self.get_target(height // 2016 - 1)
+
+    def _get_target_lwma(self, height: int, recent_headers: Optional[dict] = None) -> int:
+        """LWMA difficulty algorithm. Port of GetNextWorkRequiredLWMA from pow.cpp."""
+        net = constants.net
+        T = net.POW_TARGET_SPACING
+        N = net.LWMA_WINDOW
+
+        blocks = min(N, height - net.LWMA_HEIGHT)
+
+        if blocks < 3:
+            prev = self._get_header_by_height(height - 1, recent_headers)
+            if not prev:
+                raise MissingHeader(height - 1)
+            return self.bits_to_target(prev['bits'])
+
+        prev_header = self._get_header_by_height(height - 1, recent_headers)
+        if not prev_header:
+            raise MissingHeader(height - 1)
+        prev_target = self.bits_to_target(prev_header['bits'])
+
+        sum_weighted_solvetimes = 0
+        sum_weights = 0
+
+        # Walk back from height-1, iterating from newest (weight=blocks) to oldest (weight=1)
+        h = height - 1
+        for i in range(blocks, 0, -1):
+            block = self._get_header_by_height(h, recent_headers)
+            prev = self._get_header_by_height(h - 1, recent_headers)
+            if not block or not prev:
+                raise MissingHeader(h)
+
+            solvetime = block['timestamp'] - prev['timestamp']
+            solvetime = max(1, min(solvetime, 6 * T))
+
+            sum_weighted_solvetimes += solvetime * i
+            sum_weights += i
+            h -= 1
+
+        expected = sum_weights * T
+
+        min_ws = expected // 10
+        max_ws = expected * 10
+        sum_weighted_solvetimes = max(min_ws, min(sum_weighted_solvetimes, max_ws))
+
+        next_target = prev_target * sum_weighted_solvetimes // expected
+
+        if next_target > MAX_TARGET:
+            next_target = MAX_TARGET
+
+        # Round-trip through bits to match C++ GetCompact/SetCompact
+        next_target = self.bits_to_target(self.target_to_bits(next_target))
+        return next_target
+
+    def _get_target_lwmav2(self, height: int, recent_headers: Optional[dict] = None) -> int:
+        """LWMAv2 difficulty algorithm. Port of GetNextWorkRequiredLWMAv2 from pow.cpp."""
+        net = constants.net
+        T = net.POW_TARGET_SPACING
+        N = net.LWMA_WINDOW
+
+        # Uses original LWMA_HEIGHT for block count (not LWMA_FIX_HEIGHT)
+        blocks = min(N, height - net.LWMA_HEIGHT)
+
+        if blocks < 3:
+            prev = self._get_header_by_height(height - 1, recent_headers)
+            if not prev:
+                raise MissingHeader(height - 1)
+            return self.bits_to_target(prev['bits'])
+
+        # Walk back `blocks` steps from height-1 to find window-start block
+        window_start_height = height - 1 - blocks
+        window_start = self._get_header_by_height(window_start_height, recent_headers)
+        if not window_start:
+            raise MissingHeader(window_start_height)
+        reference_target = self.bits_to_target(window_start['bits'])
+
+        sum_weighted_solvetimes = 0
+        sum_weights = 0
+
+        h = height - 1
+        for i in range(blocks, 0, -1):
+            block = self._get_header_by_height(h, recent_headers)
+            prev = self._get_header_by_height(h - 1, recent_headers)
+            if not block or not prev:
+                raise MissingHeader(h)
+
+            solvetime = block['timestamp'] - prev['timestamp']
+            solvetime = max(1, min(solvetime, 6 * T))
+
+            sum_weighted_solvetimes += solvetime * i
+            sum_weights += i
+            h -= 1
+
+        expected = sum_weights * T
+
+        # Tighter 3x clamp
+        min_ws = expected // 3
+        max_ws = expected * 3
+        sum_weighted_solvetimes = max(min_ws, min(sum_weighted_solvetimes, max_ws))
+
+        next_target = reference_target * sum_weighted_solvetimes // expected
+
+        if next_target > MAX_TARGET:
+            next_target = MAX_TARGET
+
+        next_target = self.bits_to_target(self.target_to_bits(next_target))
+        return next_target
+
+    def _get_target_asert(self, height: int, recent_headers: Optional[dict] = None) -> int:
+        """ASERT difficulty algorithm. Port of GetNextWorkRequiredASERT from pow.cpp."""
+        net = constants.net
+        T = net.POW_TARGET_SPACING
+        halflife = net.ASERT_HALF_LIFE
+
+        anchor_target = self.bits_to_target(net.ASERT_ANCHOR_BITS)
+
+        # anchor parent timestamp = timestamp of block at (ASERT_HEIGHT - 1)
+        anchor_parent = self._get_header_by_height(net.ASERT_HEIGHT - 1, recent_headers)
+        if not anchor_parent:
+            raise MissingHeader(net.ASERT_HEIGHT - 1)
+        anchor_parent_time = anchor_parent['timestamp']
+
+        # current parent = block at height-1
+        current_parent = self._get_header_by_height(height - 1, recent_headers)
+        if not current_parent:
+            raise MissingHeader(height - 1)
+        time_delta = current_parent['timestamp'] - anchor_parent_time
+
+        height_delta = height - net.ASERT_HEIGHT
+
+        # Fixed-point exponent with 16 fractional bits
+        # C++ integer division truncates toward zero; Python // floors toward -inf
+        numerator = (time_delta - T * height_delta) * 65536
+        if numerator >= 0:
+            exponent = numerator // halflife
+        else:
+            exponent = -((-numerator) // halflife)
+
+        # Decompose into integer shifts and fractional part in [0, 65536)
+        if exponent >= 0:
+            shifts = exponent >> 16
+            frac = exponent & 0xFFFF
+        else:
+            abs_exponent = -exponent
+            shifts = -(abs_exponent >> 16)
+            remainder = abs_exponent & 0xFFFF
+            if remainder != 0:
+                shifts -= 1
+                frac = 65536 - remainder
+            else:
+                frac = 0
+
+        # Compute 2^(frac/65536) * 65536 using cubic polynomial approximation
+        factor = 65536
+        if frac > 0:
+            f = frac
+            factor = 65536 + (
+                (195766423245049 * f + 971821376 * f * f + 5127 * f * f * f + (1 << 47)) >> 48
+            )
+
+        # Apply fractional part
+        next_target = anchor_target * factor
+        next_target >>= 16
+
+        # Apply integer shifts
+        if shifts > 0:
+            if shifts >= 256:
+                return self.bits_to_target(self.target_to_bits(MAX_TARGET))
+            next_target <<= shifts
+        elif shifts < 0:
+            abs_shifts = -shifts
+            if abs_shifts >= 256:
+                return self.bits_to_target(self.target_to_bits(1))
+            next_target >>= abs_shifts
+
+        # Ensure target is at least 1
+        if next_target == 0:
+            next_target = 1
+
+        if next_target > MAX_TARGET:
+            next_target = MAX_TARGET
+
+        next_target = self.bits_to_target(self.target_to_bits(next_target))
+        return next_target
+
     def header_at_tip(self) -> Optional[dict]:
         """Return latest header."""
         height = self.height()
@@ -599,8 +823,14 @@ class Blockchain(Logger):
 
     def chainwork_of_header_at_height(self, height: int) -> int:
         """work done by single header at given height"""
-        chunk_idx = height // 2016 - 1
-        target = self.get_target(chunk_idx)
+        if height >= constants.net.LWMA_HEIGHT:
+            header = self.read_header(height)
+            if header is None:
+                raise MissingHeader(height)
+            target = self.bits_to_target(header['bits'])
+        else:
+            chunk_idx = height // 2016 - 1
+            target = self.get_target(chunk_idx)
         work = ((2 ** 256 - target - 1) // (target + 1)) + 1
         return work
 
@@ -612,6 +842,7 @@ class Blockchain(Logger):
             # On testnet/regtest, difficulty works somewhat different.
             # It's out of scope to properly implement that.
             return height
+        lwma_height = constants.net.LWMA_HEIGHT
         last_retarget = height // 2016 * 2016 - 1
         cached_height = last_retarget
         while _CHAINWORK_CACHE.get(self.get_hash(cached_height)) is None:
@@ -622,13 +853,28 @@ class Blockchain(Logger):
         running_total = _CHAINWORK_CACHE[self.get_hash(cached_height)]
         while cached_height < last_retarget:
             cached_height += 2016
-            work_in_single_header = self.chainwork_of_header_at_height(cached_height)
-            work_in_chunk = 2016 * work_in_single_header
+            chunk_start = cached_height - 2015
+            if chunk_start >= lwma_height:
+                # Per-block difficulty: sum work for each block individually
+                work_in_chunk = 0
+                for h in range(chunk_start, cached_height + 1):
+                    work_in_chunk += self.chainwork_of_header_at_height(h)
+            else:
+                work_in_single_header = self.chainwork_of_header_at_height(cached_height)
+                work_in_chunk = 2016 * work_in_single_header
             running_total += work_in_chunk
             _CHAINWORK_CACHE[self.get_hash(cached_height)] = running_total
-        cached_height += 2016
-        work_in_single_header = self.chainwork_of_header_at_height(cached_height)
-        work_in_last_partial_chunk = (height % 2016 + 1) * work_in_single_header
+        # Handle the last partial chunk
+        partial_start = last_retarget + 1
+        partial_end = height
+        if partial_start >= lwma_height:
+            work_in_last_partial_chunk = 0
+            for h in range(partial_start, partial_end + 1):
+                work_in_last_partial_chunk += self.chainwork_of_header_at_height(h)
+        else:
+            cached_height = last_retarget + 2016
+            work_in_single_header = self.chainwork_of_header_at_height(cached_height)
+            work_in_last_partial_chunk = (height % 2016 + 1) * work_in_single_header
         return running_total + work_in_last_partial_chunk
 
     def can_connect(self, header: dict, check_height: bool=True) -> bool:
@@ -646,7 +892,10 @@ class Blockchain(Logger):
         if prev_hash != header.get('prev_block_hash'):
             return False
         try:
-            target = self.get_target(height // 2016 - 1)
+            if height >= constants.net.LWMA_HEIGHT:
+                target = self.get_target_for_block(height)
+            else:
+                target = self.get_target(height // 2016 - 1)
         except MissingHeader:
             return False
         try:

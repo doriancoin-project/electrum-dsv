@@ -103,6 +103,15 @@ class BitcoinMainnet(AbstractNet):
     LN_REALM_BYTE = 0
     LN_DNS_SEEDS = []  # Lightning disabled for Doriancoin
 
+    # Difficulty algorithm activation heights and parameters
+    LWMA_HEIGHT = 1243845
+    LWMA_FIX_HEIGHT = 1244300
+    ASERT_HEIGHT = 1246000
+    POW_TARGET_SPACING = 150       # 2.5 minutes
+    LWMA_WINDOW = 45
+    ASERT_HALF_LIFE = 3600
+    ASERT_ANCHOR_BITS = 0x1d18ffe7
+
 
 class BitcoinTestnet(AbstractNet):
 
@@ -138,6 +147,15 @@ class BitcoinTestnet(AbstractNet):
     LN_REALM_BYTE = 1
     LN_DNS_SEEDS = []  # Lightning disabled for Doriancoin
 
+    # Difficulty algorithm activation heights and parameters
+    LWMA_HEIGHT = 100
+    LWMA_FIX_HEIGHT = 200
+    ASERT_HEIGHT = 300
+    POW_TARGET_SPACING = 150
+    LWMA_WINDOW = 45
+    ASERT_HALF_LIFE = 3600
+    ASERT_ANCHOR_BITS = 0x1d18ffe7
+
 
 class BitcoinRegtest(BitcoinTestnet):
 
@@ -148,6 +166,15 @@ class BitcoinRegtest(BitcoinTestnet):
     DEFAULT_SERVERS = read_json('servers_regtest.json', {})
     CHECKPOINTS = []
     LN_DNS_SEEDS = []
+
+    # Difficulty algorithm activation heights and parameters
+    LWMA_HEIGHT = 500
+    LWMA_FIX_HEIGHT = 600
+    ASERT_HEIGHT = 700
+    POW_TARGET_SPACING = 150
+    LWMA_WINDOW = 45
+    ASERT_HALF_LIFE = 3600
+    ASERT_ANCHOR_BITS = 0x1d18ffe7
 
 
 class BitcoinSimnet(BitcoinTestnet):
