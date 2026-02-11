@@ -589,13 +589,13 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         grid.addWidget(QLabel(self.format_date(start_date)), 1, 1)
         grid.addWidget(QLabel(self.format_date(end_date)), 1, 2)
         #
-        grid.addWidget(QLabel(_("LTC balance")), 2, 0)
-        grid.addWidget(QLabel(format_amount(start['LTC_balance'])), 2, 1)
-        grid.addWidget(QLabel(format_amount(end['LTC_balance'])), 2, 2)
+        grid.addWidget(QLabel(_("DSV balance")), 2, 0)
+        grid.addWidget(QLabel(format_amount(start['DSV_balance'])), 2, 1)
+        grid.addWidget(QLabel(format_amount(end['DSV_balance'])), 2, 2)
         #
-        grid.addWidget(QLabel(_("LTC Fiat price")), 3, 0)
-        grid.addWidget(QLabel(format_fiat(start.get('LTC_fiat_price'))), 3, 1)
-        grid.addWidget(QLabel(format_fiat(end.get('LTC_fiat_price'))), 3, 2)
+        grid.addWidget(QLabel(_("DSV Fiat price")), 3, 0)
+        grid.addWidget(QLabel(format_fiat(start.get('DSV_fiat_price'))), 3, 1)
+        grid.addWidget(QLabel(format_fiat(end.get('DSV_fiat_price'))), 3, 2)
         #
         grid.addWidget(QLabel(_("Fiat balance")), 4, 0)
         grid.addWidget(QLabel(format_fiat(start.get('fiat_balance'))), 4, 1)
@@ -610,12 +610,12 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         grid.addWidget(QLabel(format_fiat(end.get('unrealized_gains', ''))), 6, 2)
         #
         grid2 = QGridLayout()
-        grid2.addWidget(QLabel(_("LTC incoming")), 0, 0)
-        grid2.addWidget(QLabel(format_amount(flow['LTC_incoming'])), 0, 1)
+        grid2.addWidget(QLabel(_("DSV incoming")), 0, 0)
+        grid2.addWidget(QLabel(format_amount(flow['DSV_incoming'])), 0, 1)
         grid2.addWidget(QLabel(_("Fiat incoming")), 1, 0)
         grid2.addWidget(QLabel(format_fiat(flow.get('fiat_incoming'))), 1, 1)
-        grid2.addWidget(QLabel(_("LTC outgoing")), 2, 0)
-        grid2.addWidget(QLabel(format_amount(flow['LTC_outgoing'])), 2, 1)
+        grid2.addWidget(QLabel(_("DSV outgoing")), 2, 0)
+        grid2.addWidget(QLabel(format_amount(flow['DSV_outgoing'])), 2, 1)
         grid2.addWidget(QLabel(_("Fiat outgoing")), 3, 0)
         grid2.addWidget(QLabel(format_fiat(flow.get('fiat_outgoing'))), 3, 1)
         #

@@ -263,7 +263,7 @@ class SwapManager(Logger):
             tx: PartialTransaction = None,
             channels = None,
     ) -> str:
-        """send on-chain LTC, receive on Lightning
+        """send on-chain DSV, receive on Lightning
 
         - User generates an LN invoice with RHASH, and knows preimage.
         - User creates on-chain output locked to RHASH.

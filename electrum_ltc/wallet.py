@@ -1291,7 +1291,7 @@ class Abstract_Wallet(ABC, Logger, EventListener):
                 out = {
                     'date': date,
                     'block_height': height,
-                    'LTC_balance': Satoshis(balance),
+                    'DSV_balance': Satoshis(balance),
                 }
                 if show_fiat:
                     ap = self.acquisition_price(coins, fx.timestamp_rate, fx.ccy)
@@ -1300,14 +1300,14 @@ class Abstract_Wallet(ABC, Logger, EventListener):
                     out['liquidation_price'] = Fiat(lp, fx.ccy)
                     out['unrealized_gains'] = Fiat(lp - ap, fx.ccy)
                     out['fiat_balance'] = Fiat(fx.historical_value(balance, date), fx.ccy)
-                    out['LTC_fiat_price'] = Fiat(fx.historical_value(COIN, date), fx.ccy)
+                    out['DSV_fiat_price'] = Fiat(fx.historical_value(COIN, date), fx.ccy)
                 return out
 
             summary_start = summary_point(start_timestamp, start_height, start_balance, start_coins)
             summary_end = summary_point(end_timestamp, end_height, end_balance, end_coins)
             flow = {
-                'LTC_incoming': Satoshis(income),
-                'LTC_outgoing': Satoshis(expenditures)
+                'DSV_incoming': Satoshis(income),
+                'DSV_outgoing': Satoshis(expenditures)
             }
             if show_fiat:
                 flow['fiat_currency'] = fx.ccy

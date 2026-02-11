@@ -82,11 +82,11 @@ def all_subclasses(cls) -> Set:
 ca_path = certifi.where()
 
 
-base_units = {'LTC':8, 'mLTC':5, 'uLTC':2, 'sat':0}
+base_units = {'DSV':8, 'mDSV':5, 'uDSV':2, 'sat':0}
 base_units_inverse = inv_dict(base_units)
-base_units_list = ['LTC', 'mLTC', 'uLTC', 'sat']  # list(dict) does not guarantee order
+base_units_list = ['DSV', 'mDSV', 'uDSV', 'sat']  # list(dict) does not guarantee order
 
-DECIMAL_POINT_DEFAULT = 8  # LTC
+DECIMAL_POINT_DEFAULT = 8  # DSV
 
 
 class UnknownBaseUnit(Exception): pass
@@ -964,7 +964,7 @@ def parse_URI(uri: str, on_pr: Callable = None, *, loop=None) -> dict:
             else:
                 amount = Decimal(am) * COIN
             if amount > TOTAL_COIN_SUPPLY_LIMIT_IN_BTC * COIN:
-                raise InvalidBitcoinURI(f"amount is out-of-bounds: {amount!r} LTC")
+                raise InvalidBitcoinURI(f"amount is out-of-bounds: {amount!r} DSV")
             out['amount'] = int(amount)
         except Exception as e:
             raise InvalidBitcoinURI(f"failed to parse 'amount' field: {repr(e)}") from e

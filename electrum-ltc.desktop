@@ -2,13 +2,13 @@
 # sudo desktop-file-install electrum-ltc.desktop
 
 [Desktop Entry]
-Comment=Lightweight Litecoin Client
+Comment=Lightweight Doriancoin Client
 Exec=sh -c "PATH=\"\\$HOME/.local/bin:\\$PATH\"; electrum-ltc %u"
-GenericName[en_US]=Litecoin Wallet
-GenericName=Litecoin Wallet
+GenericName[en_US]=Doriancoin Wallet
+GenericName=Doriancoin Wallet
 Icon=electrum-ltc
-Name[en_US]=Electrum Litecoin Wallet
-Name=Electrum Litecoin Wallet
+Name[en_US]=Electrum Doriancoin Wallet
+Name=Electrum Doriancoin Wallet
 Categories=Finance;Network;
 StartupNotify=true
 StartupWMClass=electrum-ltc
