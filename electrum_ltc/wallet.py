@@ -2392,7 +2392,7 @@ class Abstract_Wallet(ABC, Logger, EventListener):
         address = x.get_address()
         d = {
             'is_lightning': is_lightning,
-            'amount_LTC': format_satoshis(x.get_amount_sat()),
+            'amount_DSV': format_satoshis(x.get_amount_sat()),
             'message': x.message,
             'timestamp': x.get_time(),
             'expiration': x.get_expiration_date(),
@@ -2423,7 +2423,7 @@ class Abstract_Wallet(ABC, Logger, EventListener):
         is_lightning = x.is_lightning()
         d = {
             'is_lightning': is_lightning,
-            'amount_LTC': format_satoshis(x.get_amount_sat()),
+            'amount_DSV': format_satoshis(x.get_amount_sat()),
             'message': x.message,
             'timestamp': x.time,
             'expiration': x.exp,
