@@ -670,10 +670,18 @@ class Transaction:
         self._version = vds.read_int32()
         n_vin = vds.read_compact_size()
         is_segwit = (n_vin == 0)
+        has_witness = False
+        has_mweb = False
         if is_segwit:
             marker = vds.read_bytes(1)
-            if marker != b'\x01':
+            flag_byte = marker[0]
+            if flag_byte == 0:
                 raise ValueError('invalid txn marker byte: {}'.format(marker))
+            has_witness = bool(flag_byte & 0x01)
+            has_mweb = bool(flag_byte & 0x08)
+            # reject unknown flag bits
+            if flag_byte & ~0x09:
+                raise ValueError('invalid txn flag byte: 0x{:02x}'.format(flag_byte))
             n_vin = vds.read_compact_size()
         if n_vin < 1:
             raise SerializationError('tx needs to have at least 1 input')
@@ -682,13 +690,19 @@ class Transaction:
         if n_vout < 1:
             raise SerializationError('tx needs to have at least 1 output')
         self._outputs = [parse_output(vds) for i in range(n_vout)]
-        if is_segwit:
+        if has_witness:
             for txin in txins:
                 parse_witness(vds, txin)
         self._inputs = txins  # only expose field after witness is parsed, for sanity
-        self._locktime = vds.read_uint32()
-        if vds.can_read_more():
-            raise SerializationError('extra junk at the end')
+        if has_mweb:
+            # MWEB extension data sits between witness and locktime.
+            # Rather than parsing the opaque MWEB blob, read locktime
+            # directly from the last 4 bytes of the raw transaction.
+            self._locktime = int.from_bytes(raw_bytes[-4:], byteorder='little')
+        else:
+            self._locktime = vds.read_uint32()
+            if vds.can_read_more():
+                raise SerializationError('extra junk at the end')
 
     @classmethod
     def get_siglist(self, txin: 'PartialTxInput', *, estimate_size=False):
