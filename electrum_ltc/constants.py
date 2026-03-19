@@ -99,7 +99,7 @@ class BitcoinMainnet(AbstractNet):
         'p2wsh':       0x02aa7ed3,  # Zpub
     }
     XPUB_HEADERS_INV = inv_dict(XPUB_HEADERS)
-    BIP44_COIN_TYPE = 1952  # Doriancoin (unregistered)
+    BIP44_COIN_TYPE = 1948  # Doriancoin (unregistered)
     LN_REALM_BYTE = 0
     LN_DNS_SEEDS = []  # Lightning disabled for Doriancoin
 
