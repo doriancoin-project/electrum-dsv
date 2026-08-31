@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is what the released binaries bundle. protobuf is pinned <4 in
+        # requirements.txt and has no wheels past 3.10, so that is the ceiling.
+        python: ['3.9', '3.10']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      # electrum prefers libsecp256k1 and silently falls back to python-ecdsa
+      # without it; some tests exercise both paths, so install it rather than
+      # testing only the fallback.
+      - name: Install libsecp256k1
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libsecp256k1-0
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # The "tests" extra pulls in pycryptodomex, cryptography and pyaes,
+          # which several tests assert are importable.
+          pip install -e ".[tests]"
+          pip install pytest
+
+      # contrib/rebrand-debt-tests.txt lists the tests whose fixtures are
+      # still Litecoin's -- see the header in that file. Deselecting them
+      # individually (rather than skipping whole modules) keeps every passing
+      # test in those modules gating master: 470 tests run here, against the
+      # 132 that survive dropping the eleven affected files wholesale.
+      - name: Unit tests
+        run: |
+          # while-read rather than mapfile: mapfile is bash 4+, and this same
+          # command should be runnable on a developer's macOS bash 3.2.
+          DESELECT=()
+          while IFS= read -r test_id; do
+            DESELECT+=("--deselect=$test_id")
+          done < <(grep -v -e '^#' -e '^[[:space:]]*$' contrib/rebrand-debt-tests.txt)
+          echo "deselecting ${#DESELECT[@]} known rebrand-debt tests"
+          pytest electrum_ltc/tests/ -v "${DESELECT[@]}"
+
+  full-suite:
+    name: Full suite (includes known rebrand failures)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    # Informational: the whole picture, Litecoin-era test vectors included.
+    # It must not gate anything until that debt is paid off, but it should be
+    # one click away, and the failure count should only ever go down.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: pip
+
+      - name: Install libsecp256k1
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libsecp256k1-0
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[tests]"
+          pip install pytest
+
+      - name: Full suite
+        run: pytest electrum_ltc/tests/ -q
