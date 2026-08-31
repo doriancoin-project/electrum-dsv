@@ -92,30 +92,47 @@ cp -f "$DLL_TARGET_DIR/libsecp256k1.so.0" "$APPDIR/usr/lib/libsecp256k1.so.0" ||
 info "building libxcb-util1."
 XCB_UTIL_VERSION="acf790d7752f36e450d476ad79807d4012ec863b"
 # ^ git tag 0.4.0
+# freedesktop decommissioned anongit, so both this repository and the m4
+# submodule it pins moved to gitlab.freedesktop.org. Same history: the commit
+# above and the submodule commit recorded in the tree are both present there
+# and are checked out explicitly, so this is a host change, not a version bump.
+XCB_UTIL_REPO="https://gitlab.freedesktop.org/xorg/lib/libxcb-util.git"
+XCB_UTIL_M4_REPO="https://gitlab.freedesktop.org/xorg/util/xcb-util-m4.git"
 (
     if [ -f "$CACHEDIR/libxcb-util1/util/src/.libs/libxcb-util.so.1" ]; then
         info "libxcb-util1 already built, skipping"
         exit 0
     fi
     cd "$CACHEDIR"
-    mkdir "libxcb-util1"
+    # -p: a cached but not-yet-built tree leaves this directory behind, and a
+    # bare mkdir would abort the script under "set -e".
+    mkdir -p "libxcb-util1"
     cd "libxcb-util1"
     if [ ! -d util ]; then
-        git clone --recursive "https://anongit.freedesktop.org/git/xcb/util"
+        # Name the target directory: the repository is libxcb-util on gitlab,
+        # so a bare clone would land somewhere the rest of this block does not
+        # look.
+        git clone "$XCB_UTIL_REPO" util || fail "Could not clone libxcb-util1"
     fi
-    cd util
+    # When the clone above failed, this cd used to fail too and the block just
+    # carried on -- running "git reset --hard" and "git clean -dfxq" against
+    # whatever directory happened to be current, i.e. the electrum working
+    # tree. Disposable on CI, not on a developer's machine.
+    cd util || fail "Could not enter the libxcb-util1 clone"
     if ! $(git cat-file -e ${XCB_UTIL_VERSION}) ; then
         info "Could not find requested version $XCB_UTIL_VERSION in local clone; fetching..."
         git fetch --all
-        git submodule update
     fi
     git reset --hard
     git clean -dfxq
     git checkout "${XCB_UTIL_VERSION}^{commit}"
+    # .gitmodules still points m4 at the dead anongit host; autogen.sh needs it.
+    git config submodule.m4.url "$XCB_UTIL_M4_REPO"
+    git submodule update --init --recursive || fail "Could not fetch the libxcb-util1 m4 submodule"
     ./autogen.sh
     ./configure --enable-shared
     make -j4 -s || fail "Could not build libxcb-util1"
-) || fail "Could build libxcb-util1"
+) || fail "Could not build libxcb-util1"
 cp "$CACHEDIR/libxcb-util1/util/src/.libs/libxcb-util.so.1" "$APPDIR/usr/lib/libxcb-util.so.1"
 
 
