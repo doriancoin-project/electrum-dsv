@@ -519,6 +519,12 @@ class Blockchain(Logger):
     def get_target_for_block(self, height: int, recent_headers: Optional[dict] = None) -> int:
         """Dispatch to the correct difficulty algorithm based on block height."""
         net = constants.net
+        # The difficulty-reset fork block is mined at a fixed target: it is the
+        # anchor of the new ASERT schedule, so it cannot be derived from one.
+        if height == net.ASERT2_HEIGHT:
+            return self.bits_to_target(net.ASERT2_ANCHOR_BITS)
+        if height > net.ASERT2_HEIGHT:
+            return self._get_target_asert2(height, recent_headers)
         if height > net.ASERT_HEIGHT:
             return self._get_target_asert(height, recent_headers)
         if height >= net.LWMA_FIX_HEIGHT:
@@ -634,27 +640,17 @@ class Blockchain(Logger):
         next_target = self.bits_to_target(self.target_to_bits(next_target))
         return next_target
 
-    def _get_target_asert(self, height: int, recent_headers: Optional[dict] = None) -> int:
-        """ASERT difficulty algorithm. Port of GetNextWorkRequiredASERT from pow.cpp."""
+    def _compute_asert(self, anchor_target: int, time_delta: int, height_delta: int) -> int:
+        """Shared ASERT core. Port of ComputeASERT from pow.cpp.
+
+        Returns anchor_target * 2^((time_delta - T*height_delta) / halflife),
+        clamped to [1, MAX_TARGET] and rounded to compact (nBits) precision.
+        A positive deviation means the chain is behind its schedule and the
+        target must rise; negative means it is ahead and the target falls.
+        """
         net = constants.net
         T = net.POW_TARGET_SPACING
         halflife = net.ASERT_HALF_LIFE
-
-        anchor_target = self.bits_to_target(net.ASERT_ANCHOR_BITS)
-
-        # anchor parent timestamp = timestamp of block at (ASERT_HEIGHT - 1)
-        anchor_parent = self._get_header_by_height(net.ASERT_HEIGHT - 1, recent_headers)
-        if not anchor_parent:
-            raise MissingHeader(net.ASERT_HEIGHT - 1)
-        anchor_parent_time = anchor_parent['timestamp']
-
-        # current parent = block at height-1
-        current_parent = self._get_header_by_height(height - 1, recent_headers)
-        if not current_parent:
-            raise MissingHeader(height - 1)
-        time_delta = current_parent['timestamp'] - anchor_parent_time
-
-        height_delta = height - net.ASERT_HEIGHT
 
         # Fixed-point exponent with 16 fractional bits
         # C++ integer division truncates toward zero; Python // floors toward -inf
@@ -690,7 +686,12 @@ class Blockchain(Logger):
         next_target = anchor_target * factor
         next_target >>= 16
 
-        # Apply integer shifts
+        # Apply integer shifts.
+        # Note: pow.cpp needs an extra guard here because arith_uint256's <<=
+        # silently discards bits past bit 255, wrapping a very large target
+        # around to a tiny one (the bug that stalled mainnet at 1359051).
+        # Python ints are arbitrary precision, so the shift below is exact and
+        # the clamp to MAX_TARGET already gives the value that guard produces.
         if shifts > 0:
             if shifts >= 256:
                 return self.bits_to_target(self.target_to_bits(MAX_TARGET))
@@ -710,6 +711,68 @@ class Blockchain(Logger):
 
         next_target = self.bits_to_target(self.target_to_bits(next_target))
         return next_target
+
+    def _get_target_asert(self, height: int, recent_headers: Optional[dict] = None) -> int:
+        """ASERT against the original anchor.
+
+        Port of GetNextWorkRequiredASERT from pow.cpp. Applies to heights in
+        (ASERT_HEIGHT, ASERT2_HEIGHT); the schedule origin is the anchor's
+        PARENT timestamp, and using parent timestamps throughout keeps the
+        current block's own timestamp out of its target.
+        """
+        net = constants.net
+
+        anchor_target = self.bits_to_target(net.ASERT_ANCHOR_BITS)
+
+        # anchor parent timestamp = timestamp of block at (ASERT_HEIGHT - 1)
+        anchor_parent = self._get_header_by_height(net.ASERT_HEIGHT - 1, recent_headers)
+        if not anchor_parent:
+            raise MissingHeader(net.ASERT_HEIGHT - 1)
+        anchor_parent_time = anchor_parent['timestamp']
+
+        # current parent = block at height-1
+        current_parent = self._get_header_by_height(height - 1, recent_headers)
+        if not current_parent:
+            raise MissingHeader(height - 1)
+        time_delta = current_parent['timestamp'] - anchor_parent_time
+
+        height_delta = height - net.ASERT_HEIGHT
+
+        return self._compute_asert(anchor_target, time_delta, height_delta)
+
+    def _get_target_asert2(self, height: int, recent_headers: Optional[dict] = None) -> int:
+        """ASERT against the second (difficulty-reset) anchor.
+
+        Port of GetNextWorkRequiredASERT2 from pow.cpp. The original anchor is
+        left untouched so every block below ASERT2_HEIGHT keeps validating
+        exactly as before.
+
+        Two things differ from the original schedule:
+
+        - The origin is the anchor block's OWN timestamp, not its parent's.
+          The anchor's parent is the stalled tip, whose timestamp is days old;
+          inheriting that gap would reproduce the very schedule debt the fork
+          exists to clear.
+        - height_delta is shifted by one to match, so the first block after the
+          anchor sees a deviation of exactly zero.
+        """
+        net = constants.net
+
+        anchor_target = self.bits_to_target(net.ASERT2_ANCHOR_BITS)
+
+        anchor = self._get_header_by_height(net.ASERT2_HEIGHT, recent_headers)
+        if not anchor:
+            raise MissingHeader(net.ASERT2_HEIGHT)
+        anchor_time = anchor['timestamp']
+
+        current_parent = self._get_header_by_height(height - 1, recent_headers)
+        if not current_parent:
+            raise MissingHeader(height - 1)
+        time_delta = current_parent['timestamp'] - anchor_time
+
+        height_delta = height - net.ASERT2_HEIGHT - 1
+
+        return self._compute_asert(anchor_target, time_delta, height_delta)
 
     def header_at_tip(self) -> Optional[dict]:
         """Return latest header."""
