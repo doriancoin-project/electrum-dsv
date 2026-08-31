@@ -1,3 +1,15 @@
+# Release 4.3.3 - (August 31, 2026)
+ * Consensus: follow the Doriancoin difficulty-reset fork. The chain stalled
+   at height 1359051 when a 256-bit overflow in the node's ASERT shift
+   produced an unmineable target, and the fix re-anchors ASERT at height
+   1359052 with nBits 0x1d027ffd. Without this the client rejects block
+   1359052 with a bits mismatch and stops syncing there. Requires
+   Doriancoin Core 0.21.82 or later on the server side.
+ * AppImage: fix the launcher, which pointed at a binary name that no longer
+   exists ("electrum-ltc"), so the AppImage failed to start.
+ * Build: tag-triggered GitHub Actions release workflow for the Windows,
+   AppImage, source and macOS builds.
+
 # Release 4.3.2 - (September 26, 2022)
  * When creating new requests, reuse addresses of expired requests
    (fixes #7927).
