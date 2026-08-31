@@ -46,7 +46,15 @@ function verify_hash() {
 function download_if_not_exist() {
     local file_name=$1 url=$2
     if [ ! -e $file_name ] ; then
-        wget -O $file_name "$url"
+        # Download to a temporary name and move it into place only on success.
+        # "wget -O $file_name" creates the file before it knows whether the
+        # request worked, so a 404 or a dropped connection leaves a truncated
+        # or zero-length file behind -- which this function then treats as
+        # "already downloaded" on every later run, and verify_hash rejects.
+        # That is worse than a failure when the build tree is a CI cache: the
+        # broken file gets cached and poisons the retry too.
+        wget -O "$file_name.part" "$url" || { rm -f "$file_name.part"; return 1; }
+        mv "$file_name.part" "$file_name"
     fi
 }
 

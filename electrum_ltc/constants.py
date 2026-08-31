@@ -111,6 +111,13 @@ class BitcoinMainnet(AbstractNet):
     LWMA_WINDOW = 45
     ASERT_HALF_LIFE = 3600
     ASERT_ANCHOR_BITS = 0x1d18ffe7
+    # Difficulty-reset fork. The chain stalled at height 1359051: a 256-bit
+    # overflow in the node's ASERT shift produced nBits 0x01010000 (target 1),
+    # an unmineable block. The fork re-anchors ASERT here so the schedule
+    # restarts with zero accumulated debt instead of sprinting through ~4,100
+    # blocks at powLimit to repay 6.6 days of lateness.
+    ASERT2_HEIGHT = 1359052
+    ASERT2_ANCHOR_BITS = 0x1d027ffd  # ~0.4 difficulty (~11 MH/s at 150 s)
 
 
 class BitcoinTestnet(AbstractNet):
@@ -155,6 +162,9 @@ class BitcoinTestnet(AbstractNet):
     LWMA_WINDOW = 45
     ASERT_HALF_LIFE = 3600
     ASERT_ANCHOR_BITS = 0x1d18ffe7
+    # Difficulty-reset fork (see mainnet).
+    ASERT2_HEIGHT = 400
+    ASERT2_ANCHOR_BITS = 0x1d027ffd  # ~0.4 difficulty (~11 MH/s at 150 s)
 
 
 class BitcoinRegtest(BitcoinTestnet):
@@ -175,6 +185,9 @@ class BitcoinRegtest(BitcoinTestnet):
     LWMA_WINDOW = 45
     ASERT_HALF_LIFE = 3600
     ASERT_ANCHOR_BITS = 0x1d18ffe7
+    # Difficulty-reset fork (see mainnet).
+    ASERT2_HEIGHT = 900
+    ASERT2_ANCHOR_BITS = 0x1d027ffd  # ~0.4 difficulty (~11 MH/s at 150 s)
 
 
 class BitcoinSimnet(BitcoinTestnet):

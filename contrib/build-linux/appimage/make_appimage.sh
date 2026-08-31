@@ -7,7 +7,7 @@ CONTRIB="$PROJECT_ROOT/contrib"
 CONTRIB_APPIMAGE="$CONTRIB/build-linux/appimage"
 DISTDIR="$PROJECT_ROOT/dist"
 BUILDDIR="$CONTRIB_APPIMAGE/build/appimage"
-APPDIR="$BUILDDIR/electrum-ltc.AppDir"
+APPDIR="$BUILDDIR/electrum-dsv.AppDir"
 CACHEDIR="$CONTRIB_APPIMAGE/.cache/appimage"
 export DLL_TARGET_DIR="$CACHEDIR/dlls"
 PIP_CACHE_DIR="$CONTRIB_APPIMAGE/.cache/pip_cache"
@@ -20,7 +20,7 @@ PY_VER_MAJOR="3.9"  # as it appears in fs paths
 PKG2APPIMAGE_COMMIT="a9c85b7e61a3a883f4a35c41c5decb5af88b6b5d"
 
 VERSION=$(git describe --tags --dirty --always)
-APPIMAGE="$DISTDIR/electrum-ltc-$VERSION-x86_64.AppImage"
+APPIMAGE="$DISTDIR/electrum-dsv-$VERSION-x86_64.AppImage"
 
 . "$CONTRIB"/build_tools_util.sh
 
@@ -35,7 +35,10 @@ info "downloading some dependencies."
 download_if_not_exist "$CACHEDIR/functions.sh" "https://raw.githubusercontent.com/AppImage/pkg2appimage/$PKG2APPIMAGE_COMMIT/functions.sh"
 verify_hash "$CACHEDIR/functions.sh" "8f67711a28635b07ce539a9b083b8c12d5488c00003d6d726c7b134e553220ed"
 
-download_if_not_exist "$CACHEDIR/appimagetool" "https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
+# Upstream renamed every release-13 asset with an "obsolete-" prefix, so the
+# old URL now 404s. Same binary -- the pinned hash below is unchanged and
+# still verifies -- so this is a rename, not a version bump.
+download_if_not_exist "$CACHEDIR/appimagetool" "https://github.com/AppImage/AppImageKit/releases/download/13/obsolete-appimagetool-x86_64.AppImage"
 verify_hash "$CACHEDIR/appimagetool" "df3baf5ca5facbecfc2f3fa6713c29ab9cefa8fd8c1eac5d283b79cab33e4acb"
 
 download_if_not_exist "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz"
@@ -89,30 +92,47 @@ cp -f "$DLL_TARGET_DIR/libsecp256k1.so.0" "$APPDIR/usr/lib/libsecp256k1.so.0" ||
 info "building libxcb-util1."
 XCB_UTIL_VERSION="acf790d7752f36e450d476ad79807d4012ec863b"
 # ^ git tag 0.4.0
+# freedesktop decommissioned anongit, so both this repository and the m4
+# submodule it pins moved to gitlab.freedesktop.org. Same history: the commit
+# above and the submodule commit recorded in the tree are both present there
+# and are checked out explicitly, so this is a host change, not a version bump.
+XCB_UTIL_REPO="https://gitlab.freedesktop.org/xorg/lib/libxcb-util.git"
+XCB_UTIL_M4_REPO="https://gitlab.freedesktop.org/xorg/util/xcb-util-m4.git"
 (
     if [ -f "$CACHEDIR/libxcb-util1/util/src/.libs/libxcb-util.so.1" ]; then
         info "libxcb-util1 already built, skipping"
         exit 0
     fi
     cd "$CACHEDIR"
-    mkdir "libxcb-util1"
+    # -p: a cached but not-yet-built tree leaves this directory behind, and a
+    # bare mkdir would abort the script under "set -e".
+    mkdir -p "libxcb-util1"
     cd "libxcb-util1"
     if [ ! -d util ]; then
-        git clone --recursive "https://anongit.freedesktop.org/git/xcb/util"
+        # Name the target directory: the repository is libxcb-util on gitlab,
+        # so a bare clone would land somewhere the rest of this block does not
+        # look.
+        git clone "$XCB_UTIL_REPO" util || fail "Could not clone libxcb-util1"
     fi
-    cd util
+    # When the clone above failed, this cd used to fail too and the block just
+    # carried on -- running "git reset --hard" and "git clean -dfxq" against
+    # whatever directory happened to be current, i.e. the electrum working
+    # tree. Disposable on CI, not on a developer's machine.
+    cd util || fail "Could not enter the libxcb-util1 clone"
     if ! $(git cat-file -e ${XCB_UTIL_VERSION}) ; then
         info "Could not find requested version $XCB_UTIL_VERSION in local clone; fetching..."
         git fetch --all
-        git submodule update
     fi
     git reset --hard
     git clean -dfxq
     git checkout "${XCB_UTIL_VERSION}^{commit}"
+    # .gitmodules still points m4 at the dead anongit host; autogen.sh needs it.
+    git config submodule.m4.url "$XCB_UTIL_M4_REPO"
+    git submodule update --init --recursive || fail "Could not fetch the libxcb-util1 m4 submodule"
     ./autogen.sh
     ./configure --enable-shared
     make -j4 -s || fail "Could not build libxcb-util1"
-) || fail "Could build libxcb-util1"
+) || fail "Could not build libxcb-util1"
 cp "$CACHEDIR/libxcb-util1/util/src/.libs/libxcb-util.so.1" "$APPDIR/usr/lib/libxcb-util.so.1"
 
 
@@ -178,8 +198,8 @@ cp "/usr/lib/x86_64-linux-gnu/libzbar.so.0" "$APPDIR/usr/lib/libzbar.so.0"
 
 
 info "desktop integration."
-cp "$PROJECT_ROOT/electrum-ltc.desktop" "$APPDIR/electrum-ltc.desktop"
-cp "$PROJECT_ROOT/electrum_ltc/gui/icons/electrum-ltc.png" "$APPDIR/electrum-ltc.png"
+cp "$PROJECT_ROOT/electrum-dsv.desktop" "$APPDIR/electrum-dsv.desktop"
+cp "$PROJECT_ROOT/electrum_ltc/gui/icons/electrum-dsv.png" "$APPDIR/electrum-dsv.png"
 
 
 # add launcher

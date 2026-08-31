@@ -1,0 +1,265 @@
+name: Release
+
+# Pushing a v* tag builds every target and opens a DRAFT release with the
+# artifacts and a SHA256SUMS attached. Nothing is published automatically --
+# review the draft, sign SHA256SUMS locally, attach SHA256SUMS.asc, publish.
+#
+# workflow_dispatch runs the same builds without touching releases, which is
+# how you validate a change to this file before tagging anything.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Changes to this file rebuild every target so it can be validated without
+  # tagging. The paths filter keeps that off every other pull request.
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+# Supersede in-flight validation runs when a pull request is pushed to again,
+# but never cancel a tag build partway through a release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # The Linux and Windows binaries are built inside the project's own builder
+  # images, which is what makes them reproducible. Note this runs the inner
+  # make_*.sh directly rather than the contrib/*/build.sh wrappers: those
+  # wrappers pass "docker run -it", and there is no TTY on a runner.
+  build-docker:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # WINE_PIP_CACHE_DIR in make_win.sh is hardcoded to
+          # c:/electrum-dsv/..., so this mount path is not free to change.
+          - name: Windows
+            image: electrum-wine-builder-img
+            context: contrib/build-wine
+            mount: /opt/wine64/drive_c/electrum-dsv
+            workdir: contrib/build-wine
+            script: ./make_win.sh
+            cache: contrib/build-wine/.cache
+            artifacts: contrib/build-wine/dist
+          - name: AppImage
+            image: electrum-appimage-builder-img
+            context: contrib/build-linux/appimage
+            mount: /opt/electrum-ltc
+            workdir: contrib/build-linux/appimage
+            script: ./make_appimage.sh
+            cache: contrib/build-linux/appimage/.cache
+            artifacts: dist
+          - name: Source dist
+            image: electrum-sdist-builder-img
+            context: contrib/build-linux/sdist
+            mount: /opt/electrum-ltc
+            workdir: contrib/build-linux/sdist
+            script: ./make_sdist.sh
+            cache: ''
+            artifacts: dist
+
+    steps:
+      # The build scripts stamp the binary with "git describe --tags", and the
+      # locale submodule supplies the compiled .mo files, so both the full
+      # history and the submodules have to be present.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      # actions/checkout replaces refs/tags/<name> with a lightweight ref
+      # pointing at the commit, discarding the annotated tag object. Re-fetch
+      # the real one so the version the binaries stamp is the tag.
+      - name: Restore the annotated tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch --force origin "+${GITHUB_REF}:${GITHUB_REF}"
+          git describe --tags
+
+      - name: Show the version the build will stamp
+        run: git describe --tags --dirty --always
+
+      - name: Restore build cache
+        if: matrix.cache != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ matrix.cache }}
+          # Rolling key: every run saves its own entry and restores the newest
+          # matching prefix, so a partially populated cache is never stranded
+          # behind an already-taken exact key.
+          key: ${{ matrix.image }}-${{ hashFiles('contrib/deterministic-build/*.txt', 'contrib/make_*.sh') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ matrix.image }}-${{ hashFiles('contrib/deterministic-build/*.txt', 'contrib/make_*.sh') }}-
+            ${{ matrix.image }}-
+
+      - name: Build the builder image
+        run: docker build -t ${{ matrix.image }} ${{ matrix.context }}
+
+      # The builder images run as their own unprivileged "user", whose uid does
+      # not match the runner's. Without this the build cannot write into the
+      # bind mount, and git refuses to describe a tree it sees as owned by
+      # someone else -- which would silently stamp the binaries "unknown"
+      # rather than fail.
+      - name: Hand the workspace to the image's build user
+        run: |
+          set -euo pipefail
+          BUILD_UID="$(docker run --rm ${{ matrix.image }} id -u)"
+          echo "BUILD_UID=$BUILD_UID" >> "$GITHUB_ENV"
+          sudo chown -R "$BUILD_UID" "$GITHUB_WORKSPACE"
+
+      - name: Build
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":${{ matrix.mount }} \
+            --workdir ${{ matrix.mount }}/${{ matrix.workdir }} \
+            ${{ matrix.image }} \
+            ${{ matrix.script }}
+
+      # Everything after this point -- artifact upload, cache save -- runs as
+      # the runner again, so take the tree back even if the build failed.
+      - name: Take the workspace back
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
+      # actions/cache only saves when the job succeeds, and these caches hold
+      # expensive things (a compiled Python, wine's pip cache, libsecp/zbar/
+      # libusb). A later failure should not throw all of that away.
+      - name: Save build cache
+        if: always() && matrix.cache != ''
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ matrix.cache }}
+          key: ${{ matrix.image }}-${{ hashFiles('contrib/deterministic-build/*.txt', 'contrib/make_*.sh') }}-${{ github.run_id }}
+
+      - name: List what was built
+        run: ls -lh ${{ matrix.artifacts }}/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.image }}
+          # The wine build leaves the unpackaged pyinstaller trees next to the
+          # installers; only the .exe/.AppImage/.tar.gz are release assets.
+          path: |
+            ${{ matrix.artifacts }}/*.exe
+            ${{ matrix.artifacts }}/*.AppImage
+            ${{ matrix.artifacts }}/*.tar.gz
+          if-no-files-found: error
+
+  build-macos:
+    name: macOS
+    # contrib/osx/osx.spec targets x86_64 and make_osx.sh installs the
+    # python.org x86_64 build of Python 3.9, so this needs an Intel runner.
+    # (macos-13 is retired; macos-15-intel is its replacement.)
+    runs-on: macos-15-intel
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Restore the annotated tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch --force origin "+${GITHUB_REF}:${GITHUB_REF}"
+          git describe --tags
+
+      # Holds the downloaded Python pkg, the compiled PyInstaller bootloader,
+      # and the libsecp256k1/zbar/libusb dylibs. make_osx.sh skips each of
+      # those steps when it finds the output already there.
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: contrib/osx/.cache
+          key: osx-${{ hashFiles('contrib/osx/make_osx.sh', 'contrib/make_*.sh', 'contrib/deterministic-build/*.txt') }}-${{ github.run_id }}
+          restore-keys: |
+            osx-${{ hashFiles('contrib/osx/make_osx.sh', 'contrib/make_*.sh', 'contrib/deterministic-build/*.txt') }}-
+            osx-
+
+      - name: Build
+        run: ./contrib/osx/make_osx.sh
+
+      - name: Save build cache
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: contrib/osx/.cache
+          key: osx-${{ hashFiles('contrib/osx/make_osx.sh', 'contrib/make_*.sh', 'contrib/deterministic-build/*.txt') }}-${{ github.run_id }}
+
+      # There is no Developer ID certificate in CI, so make_osx.sh leaves the
+      # bundle unsigned. An unsigned bundle whose dylib load commands have been
+      # rewritten is rejected on Apple Silicon, where macOS reports it as
+      # "damaged" rather than as a signing problem. Ad-hoc signing fixes that;
+      # users still get the Gatekeeper first-launch prompt.
+      #
+      # The .dmg has to be rebuilt afterwards: make_osx.sh made it from the
+      # bundle as it was before signing.
+      - name: Ad-hoc sign the app and rebuild the disk image
+        run: |
+          set -euo pipefail
+          VERSION="$(git describe --tags --dirty --always)"
+          codesign --force --deep --sign - dist/Electrum-DSV.app
+          codesign --verify --deep --strict --verbose=2 dist/Electrum-DSV.app
+          rm -f "dist/electrum-dsv-${VERSION}.dmg"
+          hdiutil create -fs HFS+ -volname Electrum-DSV \
+            -srcfolder dist/Electrum-DSV.app \
+            "dist/electrum-dsv-${VERSION}.dmg"
+          shasum -a 256 dist/*.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  draft-release:
+    name: Draft release
+    needs: [build-docker, build-macos]
+    # Only a tag push publishes anything. workflow_dispatch and pull_request
+    # are build-only, so this file can be iterated on without leaving stray
+    # tags or releases behind.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Generate SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      # Draft, so the assets can be checked and SHA256SUMS.asc attached before
+      # anyone can download them.
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --draft \
+            --title "Electrum-DSV $TAG" \
+            --generate-notes \
+            dist/*

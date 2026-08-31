@@ -7,8 +7,19 @@ FROM debian:buster@sha256:fb9654aac57319592f1d51497c62001e7033eddf059355408a0b53
 ENV LC_ALL=C.UTF-8 LANG=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 
+# The base image is past end-of-life, so its stock mirrors have moved to
+# archive.debian.org. Try the stock ones first and rewrite only if they have
+# actually gone away -- the archive's Release files are expired by design, so
+# Check-Valid-Until has to go off once we are pointed at it. Without this the
+# very first "apt update" exits 100 and the image cannot be built at all.
+RUN apt-get update -qq > /dev/null 2>&1 || ( \
+        sed -i 's|//deb.debian.org|//archive.debian.org|g; s|//security.debian.org|//archive.debian.org|g' \
+            /etc/apt/sources.list && \
+        echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/10-no-check-valid-until && \
+        apt-get update -qq > /dev/null )
+
 # need ca-certificates before using snapshot packages
-RUN apt update -qq > /dev/null && apt install -qq --yes --no-install-recommends \
+RUN apt-get install -qq --yes --no-install-recommends \
     ca-certificates
 
 # pin the distro packages
