@@ -65,14 +65,10 @@ jobs:
           echo "deselecting ${#DESELECT[@]} known rebrand-debt tests"
           pytest electrum_ltc/tests/ -v "${DESELECT[@]}"
 
-  full-suite:
-    name: Full suite (includes known rebrand failures)
+  rebrand-debt-ratchet:
+    name: Rebrand debt (full suite)
     runs-on: ubuntu-22.04
     timeout-minutes: 30
-    # Informational: the whole picture, Litecoin-era test vectors included.
-    # It must not gate anything until that debt is paid off, but it should be
-    # one click away, and the failure count should only ever go down.
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -93,5 +89,30 @@ jobs:
           pip install -e ".[tests]"
           pip install pytest
 
+      # Runs everything, Litecoin-era vectors included, and holds the failure
+      # count to the size of contrib/rebrand-debt-tests.txt. A permanently red
+      # job is a job nobody reads; this one is green today, goes red the moment
+      # something new breaks, and tells you to prune the inventory when the
+      # count drops. The number can only go down.
       - name: Full suite
-        run: pytest electrum_ltc/tests/ -q
+        run: |
+          set +e
+          pytest electrum_ltc/tests/ -q 2>&1 | tee full-suite.log
+          set -e
+
+          expected=$(grep -c -v -e '^#' -e '^[[:space:]]*$' contrib/rebrand-debt-tests.txt)
+          actual=$(sed -n 's/^\([0-9][0-9]*\) failed.*/\1/p' full-suite.log | tail -1)
+          actual=${actual:-0}
+
+          echo "known rebrand debt: $expected" >> "$GITHUB_STEP_SUMMARY"
+          echo "failing now: $actual" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$actual" -gt "$expected" ]; then
+            echo "::error::$actual tests failing, but only $expected are known rebrand debt."
+            echo "New failures are not in contrib/rebrand-debt-tests.txt; see the log above."
+            exit 1
+          fi
+          if [ "$actual" -lt "$expected" ]; then
+            echo "::notice::Only $actual of the $expected known-failing tests still fail."
+            echo "Prune the fixed ones from contrib/rebrand-debt-tests.txt."
+          fi
