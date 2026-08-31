@@ -56,6 +56,7 @@ fi
     TZ=UTC faketime -f '2000-11-11 11:11:11' python3 setup.py --quiet sdist --format=gztar --dist-dir="$PY_DISTDIR"
     if ([ "$OMIT_UNCLEAN_FILES" = 1 ]); then
         python3 <<EOF
+import glob
 import importlib.util
 import os
 
@@ -65,7 +66,10 @@ version_module = importlib.util.module_from_spec(version_spec)
 version_spec.loader.exec_module(version_module)
 
 VER = version_module.ELECTRUM_VERSION
-os.rename(f"dist/_sourceonly/Electrum-LTC-{VER}.tar.gz", f"dist/Electrum-LTC-sourceonly-{VER}.tar.gz")
+# Glob rather than reconstructing the name: it comes from setup.py's "name",
+# and newer setuptools normalises that (Electrum-DSV -> electrum_dsv).
+[sdist_path] = glob.glob("dist/_sourceonly/*.tar.gz")
+os.rename(sdist_path, f"dist/Electrum-DSV-sourceonly-{VER}.tar.gz")
 EOF
         rmdir "$PY_DISTDIR"
     fi
